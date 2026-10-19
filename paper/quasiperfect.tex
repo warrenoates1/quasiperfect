@@ -30,43 +30,20 @@ produced by an AI system. See the statement at the end.}
 
 \begin{abstract}
 A quasiperfect number is a positive integer $n$ with $\sigma(n) = 2n+1$; none is
-known. We describe an exact branch-and-bound search for odd squares satisfying
-$\sigma(n) = 2n + c$ for fixed $c \ge 1$, which carries undetermined exponents as
-intervals and closes algebraically the leaves on which enumeration does not
-terminate. It was written without reference to the method of Hagis and Cohen
-(1982), whose prime-factor bound $\omega(n) \ge 7$ it reproduces independently:
-$1.999 \times 10^{9}$ search states with none left unresolved, with coverage
-audited separately from the run, and obtained three times over by different
-decompositions, twice agreeing to the exact state count. Because the search
-handles general $c$ it can be tested against values of $c$ for which solutions
-exist, which is how every prune here is checked.
-
-Under hypotheses on the small primes we obtain bounds we cannot find in the
-literature: $\omega(n) \ge 8$ if $5 \nmid n$, $\omega(n) \ge 10$ if
-$3 \nmid n$, and $\omega(n) \ge 18$ if $\gcd(n,15) = 1$, the last improving
-$\omega \ge 15$ of Prasad and Sunitha (2017) --- which is itself just the
-elementary abundancy count, so no search appears to have been applied to that
-case before. These cases are cheap for exactly the reason the unconditional
-problem is hard: barring small primes removes the configurations that drive
-$\sigma(n)/n$ towards $2$.
-
-Unconditionally, we search $\omega = 7$ in full and find no solution and nothing
-unresolved, so every quasiperfect number has $\omega(n) \ge 8$. This is the bound
-announced by Toyohara, Tao and Yao (2026), confirmed here by an independent method
-and independent code. A compiled search of the nodes with two primes left, in
-double-double arithmetic with every survivor settled by the exact search, brought
-the cost from an estimated $21\,838$ core-hours or more down to about $61$. The
-hardest part by far was the neighbourhood of the Fermat prime $65537$.
-
-Two further results are not ours but were derived here before being found:
-the Legendre--Cattaneo filter, worth a factor of $130$ on this computation with
-its free corollary, and the
-three lemmas on which the 2026 computation rests, which together make $\omega = 7$
-affordable on one desktop and which we state and test independently rather than
-adopt on authority. Not addressed: the companion bound $n > 10^{45}$, for which
-the factor-chain method of the odd perfect literature does not transfer. The
-restriction to odd squares is taken from Cattaneo rather than reproved, and
-nothing here has been verified by anyone else.
+known. By exhaustive computer search we show that every quasiperfect number has
+at least eight distinct prime factors. This independently confirms a bound
+announced by Toyohara, Tao and Yao (2026). Under hypotheses on the small primes
+we obtain $\omega(n) \ge 18$ when $\gcd(n,15) = 1$, improving the
+$\omega(n) \ge 15$ of Prasad and Sunitha (2017), together with $\omega(n) \ge 10$
+when $3 \nmid n$ and $\omega(n) \ge 8$ when $5 \nmid n$. The search is an exact
+branch-and-bound over odd squares with $\sigma(n) = 2n + c$. Because solutions
+exist for $c > 1$, every prune can be tested against real solutions. Nodes with
+two primes left are handled by a compiled search in double-double arithmetic,
+with every survivor settled exactly. This brings the case $\omega = 7$ from an
+estimated $21\,838$ or more core-hours down to about $61$; the hardest part lies
+next to the Fermat prime $65537$. We also reproduce $\omega(n) \ge 7$ (Hagis and
+Cohen, 1982) independently. The results assume Cattaneo's theorem that $n$ is an
+odd square, and nobody else has verified them.
 \end{abstract}
 
 \maketitle
