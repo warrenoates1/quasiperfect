@@ -33,6 +33,10 @@ def run_task(task):
 
 def main():
     k, depth, workers = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])
+    # optional @file of subtree keys to leave out (run separately by qchunks.py)
+    skip = set()
+    if len(sys.argv) > 4 and sys.argv[4].startswith("@"):
+        skip = {l.strip() for l in open(sys.argv[4][1:]) if l.strip()}
     sp = Splitter(depth)
     sp.run(k)
     head = {"nodes": sp.nodes, "solutions": sp.solutions, "unresolved": sp.unresolved}
@@ -44,7 +48,7 @@ def main():
             if line.strip():
                 rec = json.loads(line)
                 done[rec["task"]] = rec
-    todo = [t for t in tasks if key(t) not in done]
+    todo = [t for t in tasks if key(t) not in done and key(t) not in skip]
     print(f"omega={k} depth={depth}: {len(tasks)} subtrees, {len(done)} done, {len(todo)} to run "
           f"on {workers} workers; head {head}", flush=True)
     t0 = time.time()
@@ -57,6 +61,9 @@ def main():
                 print("FLAG", rec, flush=True)
             if i % 2000 == 0 or i == len(todo):
                 print(f"  {len(done)}/{len(tasks)} subtrees, {time.time() - t0:.0f}s", flush=True)
+    if skip:
+        print(f"DONE except {len(skip)} skipped subtrees; combine with finalize_omega7.py", flush=True)
+        return
     recs = [done[key(t)] for t in tasks]
     summary = {"omega": k, "depth": depth, "subtrees": len(tasks),
                "python_states": head["nodes"] + sum(r["nodes"] for r in recs),

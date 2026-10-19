@@ -11,6 +11,13 @@ not an author. See the statement on authorship at the end of the paper.
 **Nothing here has been checked by anyone else yet.** Independent checks are
 the point of publishing it.
 
+**Status of ω ≥ 8 (19 Oct 2026).** Writing out the floating-point error bound
+showed that the first ω = 7 run used a comparison slack too small for the
+small primes involved, so that run is not a proof. ω = 7 is being re-run in
+full on corrected code. Until it finishes, treat ω ≥ 8 as unconfirmed here. The
+ω = 17 node behind ω ≥ 18 involves only tiny quantities, so it meets the bound
+as it stands. See the paper, "Soundness of the floating-point comparisons".
+
 ## Results
 
 | Statement | Previously known | Where |
