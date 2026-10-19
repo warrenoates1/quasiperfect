@@ -1544,6 +1544,13 @@ from numba import njit
 from qp import is_probable_prime
 
 S_SLACK = 1e-35
+# Rounding error of a double-double chain grows with the size of its terms, not
+# just with their result: about u^2 = 2^-106 per operation per unit of operand.
+# With terms up to ~0.2 (L(q) for small q) a fixed 1e-35 is NOT enough, so every
+# comparison also carries REL times the sum of the magnitudes it combines. REL is
+# 2048 u^2, a deliberately loose cover for the worst chain (see the paper,
+# "Soundness of the floating-point comparisons").
+REL = 2048.0 * 2.0 ** -106
 D_FLOOR = 1e-58          # bound on d for exponents past the table
 W_Q2 = 32                # enumerate q' when the range holds at most this many integers
 Q2_MAX = 4e18            # beyond this q' goes to the exact code (int64 limit)
@@ -1807,8 +1814,9 @@ def run_node(n0, primes, floor0, fixed0, dtab, dtl, allowed, amax, lnp,
         split = False
         if lv == 2:
             # q <= q' gives 2 L(q) >= K + Dlo, so q <= qmax
+            sl = S_SLACK + REL * (abs(K) + Dhi)
             h, l = dd_add(K, KL, Dlo, Dll)
-            X = 0.5 * (h + l) - S_SLACK
+            X = 0.5 * (h + l) - sl
             if X <= 0.0 and best >= 0:
                 split = True
             else:
@@ -1820,7 +1828,7 @@ def run_node(n0, primes, floor0, fixed0, dtab, dtl, allowed, amax, lnp,
                     qmax = int(1.0 / (-math.expm1(-X))) + 2
                 # q' > q gives log f(q,1) < K + Dhi + eps, so q >= qlow
                 h, l = dd_add(K, KL, Dhi, Dhl)
-                Y = h + l + epsmax + S_SLACK
+                Y = h + l + epsmax + sl
                 if Y <= 0.0:
                     continue
                 if Y > 30.0:                      # huge eps (c > 1 only): no lower bound
@@ -1852,13 +1860,14 @@ def run_node(n0, primes, floor0, fixed0, dtab, dtl, allowed, amax, lnp,
                     continue
         elif lv == 1:
             Lh, Ll = L_of(q)
+            sl = S_SLACK + REL * (abs(K) + Dhi + Lh)
             # R = L(q') - d_q' = K + D + eps - L(q); q' needs log f(q',1) <= Rhi, L(q') > Rlo
             h, l = dd_add(K, KL, Dhi, Dhl)
             h, l = dd_add(h, l, -Lh, -Ll)
-            Rhi = h + l + epsmax + S_SLACK
+            Rhi = h + l + epsmax + sl
             h, l = dd_add(K, KL, Dlo, Dll)
             h, l = dd_add(h, l, -Lh, -Ll)
-            Rlo = h + l - S_SLACK
+            Rlo = h + l - sl
             if Rhi <= 0.0:
                 continue
             # bounds as floats first: q' can be far beyond int64 when R is tiny
@@ -1932,16 +1941,17 @@ def run_node(n0, primes, floor0, fixed0, dtab, dtl, allowed, amax, lnp,
         else:
             Lh, Ll = L_of(q)
             L2h, L2l = L_of(q2)
+            sl = S_SLACK + REL * (abs(K) + Dhi + Lh + L2h)
             h, l = dd_add(Lh, Ll, L2h, L2l)
             # need K + Dlo <= L + L' <= K + Dhi + eps
             u, ul = dd_add(h, l, -K, -KL)
             v, vl = dd_add(u, ul, -Dlo, -Dll)
-            if v + vl < -S_SLACK:
+            if v + vl < -sl:
                 continue
             v, vl = dd_add(u, ul, -Dhi, -Dhl)
-            if v + vl > epsmax + S_SLACK:
+            if v + vl > epsmax + sl:
                 continue
-            if best < 0 or (Dhi - Dlo) + (Dhl - Dll) <= epsmax + 2 * S_SLACK:
+            if best < 0 or (Dhi - Dlo) + (Dhl - Dll) <= epsmax + 2 * sl:
                 if nout < out.shape[0]:
                     out[nout, 0] = q
                     out[nout, 1] = q2
@@ -2131,6 +2141,10 @@ def run_task(task):
 
 def main():
     k, depth, workers = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])
+    # optional @file of subtree keys to leave out (run separately by qchunks.py)
+    skip = set()
+    if len(sys.argv) > 4 and sys.argv[4].startswith("@"):
+        skip = {l.strip() for l in open(sys.argv[4][1:]) if l.strip()}
     sp = Splitter(depth)
     sp.run(k)
     head = {"nodes": sp.nodes, "solutions": sp.solutions, "unresolved": sp.unresolved}
@@ -2142,7 +2156,7 @@ def main():
             if line.strip():
                 rec = json.loads(line)
                 done[rec["task"]] = rec
-    todo = [t for t in tasks if key(t) not in done]
+    todo = [t for t in tasks if key(t) not in done and key(t) not in skip]
     print(f"omega={k} depth={depth}: {len(tasks)} subtrees, {len(done)} done, {len(todo)} to run "
           f"on {workers} workers; head {head}", flush=True)
     t0 = time.time()
@@ -2155,6 +2169,9 @@ def main():
                 print("FLAG", rec, flush=True)
             if i % 2000 == 0 or i == len(todo):
                 print(f"  {len(done)}/{len(tasks)} subtrees, {time.time() - t0:.0f}s", flush=True)
+    if skip:
+        print(f"DONE except {len(skip)} skipped subtrees; combine with finalize_omega7.py", flush=True)
+        return
     recs = [done[key(t)] for t in tasks]
     summary = {"omega": k, "depth": depth, "subtrees": len(tasks),
                "python_states": head["nodes"] + sum(r["nodes"] for r in recs),

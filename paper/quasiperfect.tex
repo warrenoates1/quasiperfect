@@ -31,7 +31,8 @@ produced by an AI system. See the statement at the end.}
 \begin{abstract}
 A quasiperfect number is a positive integer $n$ with $\sigma(n) = 2n+1$; none is
 known. By exhaustive computer search we show that every quasiperfect number has
-at least eight distinct prime factors. This independently confirms a bound
+at least eight distinct prime factors (a repeat with corrected rounding bounds is
+in progress; Section~\ref{sec:fpgap}). This independently confirms a bound
 announced by Toyohara, Tao and Yao (2026). Under hypotheses on the small primes
 we obtain $\omega(n) \ge 18$ when $\gcd(n,15) = 1$, improving the
 $\omega(n) \ge 15$ of Prasad and Sunitha (2017), together with $\omega(n) \ge 10$
@@ -1715,10 +1716,16 @@ unresolved states & none \\
 subtrees or pieces missing & none \\
 \bottomrule
 \end{tabular}
-\caption{The complete $\omega = 7$ search (\texttt{finalize\_omega7.py},
+\caption{The first complete $\omega = 7$ search (\texttt{finalize\_omega7.py},
 \texttt{results/omega7\_final.json}). Coverage is checked against the task list
 regenerated from the splitter, not against the records alone.}
 \end{table}
+
+\textbf{Status, 19 October 2026.} This run used a fixed comparison slack that
+Section~\ref{sec:fpgap} shows to be insufficient for the small primes of
+$\omega = 7$. It is being repeated in full with the corrected slack, and the
+theorem below rests on the repeat. Its figures will replace these when it
+finishes.
 
 \begin{theorem}\label{thm:omega8}
 Subject to the implementation, and to Cattaneo's theorem that a quasiperfect
@@ -1732,6 +1739,124 @@ rather than taken from that paper. Proposition~\ref{prop:forced15} is subsumed b
 it. The caveat is the same as everywhere in this paper and sharper here. Nearly
 all the work was done by new code checked by tests, by planted and real
 solutions, and by the exact search on every survivor, but by no one else.
+
+% ---------------------------------------------------------------------------
+\section{Soundness of the floating-point comparisons}\label{sec:fpsound}
+The compiled searches (\texttt{qfast.py}, \texttt{qnode.py}) discard a region
+only when a floating-point comparison says it cannot hold a solution. This
+section bounds the rounding error of every such comparison, and shows that the
+slack added to each one exceeds that bound. This argument was missing from the
+first version of the paper, and writing it out exposed a real gap, described in
+Section~\ref{sec:fpgap}.
+
+\subsection{Model}
+Arithmetic is IEEE binary64 with round-to-nearest, $u = 2^{-53}$, with no fused
+multiply-add. A double-double value is a pair $(h, \ell)$ with $|\ell| \le u|h|$,
+representing $h + \ell$. Every quantity used lies far from overflow. Underflow
+can occur only in powers $x^{-(2b+1)}$ below $10^{-290}$, and those enter only as
+upper bounds on $d_x(b)$, where a value below $10^{-290}$ is covered by the
+absolute slack. We use three standard facts. \textsc{TwoSum}$(a, b)$ returns
+$s, e$ with $s + e = a + b$ exactly (Knuth). \textsc{FastTwoSum}$(a, b)$ does the
+same when $|a| \ge |b|$. Dekker's \textsc{TwoProd} returns $p + e = ab$ exactly
+when nothing underflows.
+
+\subsection{The primitives}
+\begin{lemma}\label{lem:ddadd}
+For double-double inputs $a, b$, the addition in \texttt{dd\_add} returns $c$
+with $|c - (a + b)| \le 20u^{2}(|a| + |b|)$.
+\end{lemma}
+\begin{proof}
+\textsc{TwoSum} gives $s + e_0 = a_h + b_h$ exactly, with $|e_0| \le u|s|$. The
+two further additions of $a_\ell$ and $b_\ell$ to $e_0$ incur at most
+$2u(1+u)(|e_0| + |a_\ell| + |b_\ell|) \le 2u^{2}(1+u)(2+u)(|a_h| + |b_h|)$, since
+$|s| \le (1+u)(|a_h| + |b_h|)$. If the final \textsc{FastTwoSum} has its
+precondition it is exact. If it does not, $|s|$ is smaller than the corrected
+term $\hat e$, and its error is at most $2u(|s| + |\hat e|) \le 4u|\hat e|$,
+which is again $O(u^{2})(|a| + |b|)$ by the previous bound. Adding the two cases
+gives the constant $20$, which is not tight.
+\end{proof}
+
+\begin{lemma}\label{lem:ddseries}
+The routine computing $-\log(1 - x)$ for double-double $0 < x \le 1/7$, by summing
+$x^{k}/k$ until a term falls below $10^{-48}$, has error at most
+$1200u^{2}\,|{-\log(1-x)}| + 2 \times 10^{-48}$. The same bound covers
+$L(x) = -\log(1 - 1/x)$ for $x \ge 7$ and $d_x(b)$ for all $b \ge 1$.
+\end{lemma}
+\begin{proof}
+Each power $x^{k}$ is formed by $k - 1$ double-double products, each with relative
+error at most $8u^{2}$, and divided by $k$ with relative error at most $2u^{2}$,
+so term $k$ carries relative error at most $8ku^{2}$. Weighted by the terms, that
+is at most $8u^{2} \sum_{k} x^{k} \le 10u^{2}\,(-\log(1-x))$ for $x \le 1/7$.
+Summing at most $60$ terms costs, by Lemma~\ref{lem:ddadd}, at most
+$60 \times 20u^{2}$ times the partial sums, all bounded by the total. Truncation
+drops a tail below $10^{-48}/(1-x) \le 1.2 \times 10^{-48}$. For $d_x(b)$ the
+argument is $x^{-(2b+1)}$, formed by $2b$ products, which adds at most $16bu^{2}$
+relative error to a term that is tiny whenever $b$ is large. The bound stands
+with margin at the exponents that occur.
+\end{proof}
+
+The node constants, $K$ and every $d_p(a)$ of a node prime, are computed
+separately as $80$-digit decimals from exact rationals and then split into
+$(h, \ell)$. Each is therefore within $2u^{2}$ of its true value, relatively.
+
+\subsection{The comparisons}
+Every pruning comparison has the form $\sum_i \pm T_i \ \lessgtr\ \pm\sigma$, where
+the $T_i$ are $K$, the $d$-terms of the box, and $L(q)$ and $L(q')$ where present.
+The sum takes at most $16$ additions for $\omega \le 7$ and at most $20$ for the
+$\omega = 17$ node. Combining Lemmas~\ref{lem:ddadd} and~\ref{lem:ddseries}, the
+computed sum is within
+\[
+  E \;=\; (16 \times 20 + 1200 + 2)\,u^{2} \sum_i |T_i| \;+\; 4 \times 10^{-48}
+  \;<\; 2048\,u^{2} \sum_i |T_i| \;+\; 10^{-47}
+\]
+of the exact sum. The double-double result is then rounded to one double, a
+relative change of at most $u$. That preserves the sign, and costs at most $u$
+times the slack, which the margin in $2048$ absorbs. Integer bounds for the next
+prime are derived from these values through $\exp$, $\log$, $\sqrt{\ }$ and
+reciprocals. That adds a relative error of at most $10u$ in $q$, which is covered
+by the margins of $\pm 2$ and the relative $\pm 4 \times 10^{-15}$ used there.
+The allowance $\varepsilon \le c/(2N_{\min})$ is computed from a sum of logarithms,
+with relative error below $10^{-11}$, and multiplied by $1 + 10^{-6}$.
+
+\begin{proposition}\label{prop:fpsound}
+If every comparison uses slack at least $10^{-35} + 2048u^{2} \sum_i |T_i|$, no
+comparison of the compiled search discards a region containing a solution.
+\end{proposition}
+\begin{proof}
+The slack exceeds $E$ in every comparison, so a comparison that discards a region
+would also discard it in exact arithmetic. Each such exact test is a consequence
+of the equation $L(q) + L(q') = K + \sum d + \varepsilon$ restricted to the box.
+\end{proof}
+
+\paragraph{The $\omega = 17$ node.} \texttt{qfast.py} uses a fixed slack of
+$10^{-35}$. Every term there has size at most about $2 \times 10^{-9}$, so
+$\sum |T_i| \le 10^{-8}$ and $E < 2.6 \times 10^{-37}$, a fortieth of the slack.
+Its series are short and explicit: $\log f(x)$ to four terms in
+$x^{-1} \le 1.8 \times 10^{-9}$, and $d_p(a)$ and $K$ from rationals. Their
+truncation is below $10^{-44}$. So Proposition~\ref{prop:fpsound} applies as the
+code stands, and the $\omega \ge 18$ result does not depend on the gap below.
+
+\subsection{The gap, and the re-run}\label{sec:fpgap}
+In \texttt{qnode.py} the terms are not small. For a node such as
+$3^{a} 5^{b} 17^{c} 257^{d} q_5^{2}$ followed by $q$ and $q'$, the prime $q$ can be
+as small as $q_5 + 1$, and at the smallest nodes $L(q)$ approaches $0.15$. There
+$2048u^{2}\sum|T_i|$ is about $10^{-30}$, and the measured error of $L(7)$ alone
+is $2.9 \times 10^{-33}$, against a fixed slack of $10^{-35}$. A true solution
+sits exactly on the boundary of its box, with margin $\varepsilon$, about
+$1/(2N)$, far below either figure. So the first $\omega = 7$ run (17--19 October
+2026) did not satisfy Proposition~\ref{prop:fpsound}. A solution could in
+principle have been discarded by rounding, though nothing suggests one was.
+
+\texttt{qnode.py} now adds $2048u^{2}\sum|T_i|$ to the slack of every comparison,
+and $\omega = 7$ has been run again in full on the corrected code; the result
+reported in Section~\ref{sec:omega7} is the re-run. The records of the first run
+are kept, marked \texttt{v1}.
+
+\paragraph{Measurement.} \texttt{test\_dd\_error.py} compares the kernel's $L$,
+$d$ and chains of the comparison shape against $90$-digit references, on $4\,000$
+random cases with $x$ from $7$ to $10^{12}$. The worst errors beyond the
+truncation term are $3.9u^{2}$, $9.2u^{2}$ and $4.6u^{2}$ times the magnitude. That
+is more than two hundred times inside the bound, which is deliberately loose.
 
 \section{How the search was developed}\label{sec:history}
 
